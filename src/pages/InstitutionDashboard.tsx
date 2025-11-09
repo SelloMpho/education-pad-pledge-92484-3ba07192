@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
 import { CertificateUpload } from '@/components/dashboard/CertificateUpload';
+import { InstitutionDonations } from '@/components/dashboard/institution/InstitutionDonations';
 
 export default function InstitutionDashboard() {
   const navigate = useNavigate();
@@ -196,6 +197,7 @@ export default function InstitutionDashboard() {
         navigate('/messages');
         return null;
       case 'donations':
+        return <InstitutionDonations />;
       case 'reports':
       case 'analytics':
       case 'profile':
