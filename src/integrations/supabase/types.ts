@@ -14,20 +14,156 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      [_ in never]: never
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
+      profiles: {
+        Row: {
+          id: string;
+          email: string;
+          full_name: string | null;
+          phone: string | null;
+          user_type: 'institution' | 'investor' | 'admin';
+          verification_status: 'pending' | 'verified' | 'rejected';
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          email: string;
+          full_name?: string | null;
+          phone?: string | null;
+          user_type: 'institution' | 'investor' | 'admin';
+          verification_status?: 'pending' | 'verified' | 'rejected';
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          email?: string;
+          full_name?: string | null;
+          phone?: string | null;
+          user_type?: 'institution' | 'investor' | 'admin';
+          verification_status?: 'pending' | 'verified' | 'rejected';
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      institutions: {
+        Row: {
+          id: string;
+          user_id: string;
+          institution_name: string;
+          country: string;
+          city: string;
+          address: string;
+          contact_person: string;
+          contact_position: string | null;
+          certificate_url: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          institution_name: string;
+          country: string;
+          city: string;
+          address: string;
+          contact_person: string;
+          contact_position?: string | null;
+          certificate_url?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          institution_name?: string;
+          country?: string;
+          city?: string;
+          address?: string;
+          contact_person?: string;
+          contact_position?: string | null;
+          certificate_url?: string | null;
+          created_at?: string;
+        };
+      };
+      investors: {
+        Row: {
+          id: string;
+          user_id: string;
+          investor_type: 'individual' | 'corporate' | 'foundation' | 'ngo';
+          company_name: string | null;
+          certificate_url: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          investor_type: 'individual' | 'corporate' | 'foundation' | 'ngo';
+          company_name?: string | null;
+          certificate_url?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          investor_type?: 'individual' | 'corporate' | 'foundation' | 'ngo';
+          company_name?: string | null;
+          certificate_url?: string | null;
+          created_at?: string;
+        };
+      };
+      conversations: {
+        Row: {
+          id: string;
+          institution_id: string;
+          investor_id: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          institution_id: string;
+          investor_id: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          institution_id?: string;
+          investor_id?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      messages: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          sender_id: string;
+          content: string;
+          read: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          sender_id: string;
+          content: string;
+          read?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          conversation_id?: string;
+          sender_id?: string;
+          content?: string;
+          read?: boolean;
+          created_at?: string;
+        };
+      };
+    };
+    Views: {};
+    Functions: {};
+    Enums: {};
+    CompositeTypes: {};
   }
 }
 

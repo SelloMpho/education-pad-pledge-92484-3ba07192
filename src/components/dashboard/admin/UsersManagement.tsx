@@ -38,6 +38,8 @@ export const UsersManagement = () => {
   const { toast } = useToast();
   const [users, setUsers] = useState<Profile[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterUserType, setFilterUserType] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
   const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -48,6 +50,22 @@ export const UsersManagement = () => {
 
   useEffect(() => {
     fetchUsers();
+
+    // Subscribe to realtime changes on profiles to keep list live
+    const channel = supabase
+      .channel('admin-users-profiles-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles' },
+        () => {
+          fetchUsers();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fetchUsers = async () => {
@@ -131,10 +149,20 @@ export const UsersManagement = () => {
   };
 
   const filteredUsers = users.filter(
-    (user) =>
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.user_type.toLowerCase().includes(searchTerm.toLowerCase())
+    (user) => {
+      const matchesSearch =
+        user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.user_type.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchesType =
+        filterUserType === 'all' || user.user_type.toLowerCase() === filterUserType;
+
+      const matchesStatus =
+        filterStatus === 'all' || user.verification_status.toLowerCase() === filterStatus;
+
+      return matchesSearch && matchesType && matchesStatus;
+    }
   );
 
   return (
@@ -143,14 +171,44 @@ export const UsersManagement = () => {
         <CardHeader>
           <CardTitle>Users Management</CardTitle>
           <CardDescription>View and manage all registered users</CardDescription>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search users..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9"
-            />
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search users..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">User Type</Label>
+              <Select value={filterUserType} onValueChange={setFilterUserType}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="institution">Institution</SelectItem>
+                  <SelectItem value="investor">Investor</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Verification Status</Label>
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="verified">Verified</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardHeader>
         <CardContent>

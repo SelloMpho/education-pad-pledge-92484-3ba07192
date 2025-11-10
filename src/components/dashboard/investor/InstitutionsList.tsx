@@ -24,17 +24,55 @@ export const InstitutionsList = () => {
 
   useEffect(() => {
     fetchInstitutions();
+    // Subscribe to realtime changes on institutions and profiles
+    const channel = supabase
+      .channel('investor_institutions_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'institutions' }, () => {
+        fetchInstitutions();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, (payload) => {
+        const newType = (payload.new as any)?.user_type;
+        const oldType = (payload.old as any)?.user_type;
+        const relevant = newType === 'institution' || oldType === 'institution';
+        if (relevant) fetchInstitutions();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fetchInstitutions = async () => {
     try {
       const { data, error } = await supabase
         .from('institutions')
-        .select('*')
+        .select(`
+          id,
+          institution_name,
+          country,
+          city,
+          address,
+          contact_person,
+          contact_position,
+          profiles:profiles!user_id(id, user_type, verification_status, full_name)
+        `)
+        .eq('profiles.user_type', 'institution')
+        .eq('profiles.verification_status', 'verified')
         .order('institution_name');
 
       if (error) throw error;
-      setInstitutions(data || []);
+      // Map back to Institution type shape
+      const list = (data || []).map((row: any) => ({
+        id: row.id,
+        institution_name: row.institution_name,
+        country: row.country,
+        city: row.city,
+        address: row.address,
+        contact_person: row.contact_person,
+        contact_position: row.contact_position ?? null,
+      }));
+      setInstitutions(list);
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -51,13 +89,20 @@ export const InstitutionsList = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      const { data: investor } = await supabase
+      const { data: investor, error: investorError } = await supabase
         .from('investors')
         .select('id')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (!investor) throw new Error('Investor profile not found');
+      if (investorError || !investor) {
+        toast({
+          title: 'Profile required',
+          description: 'Please complete your investor profile first.',
+          variant: 'destructive',
+        });
+        return;
+      }
 
       // Check if conversation already exists
       const { data: existingConv } = await supabase

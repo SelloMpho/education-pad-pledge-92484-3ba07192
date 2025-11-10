@@ -12,6 +12,10 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
 import { CertificateUpload } from '@/components/dashboard/CertificateUpload';
 import { InstitutionDonations } from '@/components/dashboard/institution/InstitutionDonations';
+import InstitutionReports from '@/components/dashboard/institution/InstitutionReports';
+import InstitutionAnalytics from '@/components/dashboard/institution/InstitutionAnalytics';
+import InstitutionProfile from '@/components/dashboard/institution/InstitutionProfile';
+import { Navbar } from '@/components/Navbar';
 
 export default function InstitutionDashboard() {
   const navigate = useNavigate();
@@ -38,6 +42,12 @@ export default function InstitutionDashboard() {
     }
   }, [role]);
 
+  useEffect(() => {
+    if (activeTab === 'messages') {
+      navigate('/messages');
+    }
+  }, [activeTab, navigate]);
+
   const fetchDashboardData = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -57,24 +67,36 @@ export default function InstitutionDashboard() {
 
       setInstitutionData(institution);
 
+      // If the institution record is missing, skip dependent queries safely
+      if (!institution) {
+        setDonations([]);
+        setStats({
+          totalConversations: 0,
+          activeInvestors: 0,
+          pendingMessages: 0,
+          verificationStatus: profile?.verification_status ?? 'pending',
+        });
+        return;
+      }
+
       const { data: conversations } = await supabase
         .from('conversations')
         .select('*')
-        .eq('institution_id', institution?.id || '');
+        .eq('institution_id', institution.id);
 
       const { data: messages } = await supabase
         .from('messages')
         .select('*')
-        .in('conversation_id', conversations?.map(c => c.id) || [])
+        .in('conversation_id', conversations?.map((c: any) => c.id) ?? [])
         .eq('read', false);
 
-      setDonations(conversations || []);
+      setDonations(conversations ?? []);
 
       setStats({
-        totalConversations: conversations?.length || 0,
-        activeInvestors: new Set(conversations?.map(c => c.investor_id)).size || 0,
-        pendingMessages: messages?.length || 0,
-        verificationStatus: profile?.verification_status || 'pending',
+        totalConversations: conversations?.length ?? 0,
+        activeInvestors: conversations ? new Set(conversations.map((c: any) => c.investor_id).filter(Boolean)).size : 0,
+        pendingMessages: messages?.length ?? 0,
+        verificationStatus: profile?.verification_status ?? 'pending',
       });
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -178,15 +200,15 @@ export default function InstitutionDashboard() {
                 <CardContent className="grid md:grid-cols-3 gap-4">
                   <div>
                     <p className="text-sm text-muted-foreground">Institution Name</p>
-                    <p className="font-medium">{institutionData.institution_name || 'N/A'}</p>
+                    <p className="font-medium">{institutionData?.institution_name || 'N/A'}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Location</p>
-                    <p className="font-medium">{institutionData.city}, {institutionData.country}</p>
+                    <p className="font-medium">{institutionData?.city}, {institutionData?.country}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Contact Person</p>
-                    <p className="font-medium">{institutionData.contact_person || 'N/A'}</p>
+                    <p className="font-medium">{institutionData?.contact_person || 'N/A'}</p>
                   </div>
                 </CardContent>
               </Card>
@@ -199,7 +221,9 @@ export default function InstitutionDashboard() {
       case 'donations':
         return <InstitutionDonations />;
       case 'reports':
+        return <InstitutionReports />;
       case 'analytics':
+        return <InstitutionAnalytics />;
       case 'profile':
         return (
           <div className="space-y-6">
@@ -208,17 +232,7 @@ export default function InstitutionDashboard() {
               currentCertificateUrl={institutionData?.certificate_url}
               onUploadSuccess={fetchDashboardData}
             />
-            <Card>
-              <CardHeader>
-                <CardTitle>Profile Settings</CardTitle>
-                <CardDescription>Additional profile features coming soon</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground text-center py-12">
-                  Profile management features coming soon
-                </p>
-              </CardContent>
-            </Card>
+            <InstitutionProfile />
           </div>
         );
       default:
@@ -227,20 +241,23 @@ export default function InstitutionDashboard() {
   };
 
   return (
-    <div className="flex min-h-screen w-full bg-background">
-      <InstitutionSidebar 
-        selected={activeTab} 
-        onSelect={setActiveTab}
-        pendingCount={stats.pendingMessages}
-        messageCount={stats.pendingMessages}
-      />
-      <main className="flex-1 overflow-y-auto p-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Institution Dashboard</h1>
-          <p className="text-muted-foreground">Welcome back to your institution hub</p>
-        </div>
-        {renderContent()}
-      </main>
+    <div className="min-h-screen w-full bg-background flex flex-col">
+      <Navbar />
+      <div className="flex flex-1">
+        <InstitutionSidebar 
+          selected={activeTab} 
+          onSelect={setActiveTab}
+          pendingCount={stats.pendingMessages}
+          messageCount={stats.pendingMessages}
+        />
+        <main className="flex-1 overflow-y-auto p-8 pt-24">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold mb-2">Institution Dashboard</h1>
+            <p className="text-muted-foreground">Welcome back to your institution hub</p>
+          </div>
+          {renderContent()}
+        </main>
+      </div>
     </div>
   );
 }

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
-import { Search, Eye, FileText } from 'lucide-react';
+import { Search, Eye, FileText, CheckCircle, XCircle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -37,11 +37,31 @@ export const InvestorsManagement = () => {
   const { toast } = useToast();
   const [investors, setInvestors] = useState<InvestorWithProfile[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'verified' | 'rejected'>('all');
+  const [pendingOnly, setPendingOnly] = useState(false);
   const [selectedInvestor, setSelectedInvestor] = useState<InvestorWithProfile | null>(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
 
   useEffect(() => {
     fetchInvestors();
+    // Subscribe to realtime changes for investors and profiles
+    const channel = supabase
+      .channel('admin-investors-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'investors' },
+        () => fetchInvestors()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles' },
+        () => fetchInvestors()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fetchInvestors = async () => {
@@ -71,6 +91,31 @@ export const InvestorsManagement = () => {
     }
   };
 
+  const handleVerification = async (
+    userId: string,
+    status: 'verified' | 'rejected'
+  ) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ verification_status: status })
+        .eq('id', userId);
+
+      if (error) throw error;
+      toast({
+        title: 'Success',
+        description: `Investor ${status === 'verified' ? 'verified' : 'rejected'} successfully`,
+      });
+      fetchInvestors();
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update verification status',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleViewCertificate = async (certificateUrl: string) => {
     try {
       const { data } = await supabase.storage
@@ -90,11 +135,19 @@ export const InvestorsManagement = () => {
   };
 
   const filteredInvestors = investors.filter(
-    (inv) =>
-      inv.profiles?.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.profiles?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inv.investor_type.toLowerCase().includes(searchTerm.toLowerCase())
+    (inv) => {
+      const matchesSearch =
+        inv.profiles?.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        inv.profiles?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        inv.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        inv.investor_type.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const status = (inv.profiles?.verification_status || '').toLowerCase();
+      const matchesStatus = statusFilter === 'all' || status === statusFilter;
+      const matchesPendingToggle = !pendingOnly || status === 'pending';
+
+      return matchesSearch && matchesStatus && matchesPendingToggle;
+    }
   );
 
   return (
@@ -103,14 +156,55 @@ export const InvestorsManagement = () => {
         <CardHeader>
           <CardTitle>Investors Management</CardTitle>
           <CardDescription>View and manage all registered investors</CardDescription>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search investors..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search investors..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-9"
-            />
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant={statusFilter === 'all' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setStatusFilter('all')}
+              >
+                All
+              </Button>
+              <Button
+                variant={statusFilter === 'pending' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setStatusFilter('pending')}
+              >
+                Pending
+              </Button>
+              <Button
+                variant={statusFilter === 'verified' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setStatusFilter('verified')}
+              >
+                Verified
+              </Button>
+              <Button
+                variant={statusFilter === 'rejected' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setStatusFilter('rejected')}
+              >
+                Rejected
+              </Button>
+            </div>
+            <div className="flex items-center justify-end">
+              <Button
+                variant={pendingOnly ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setPendingOnly((p) => !p)}
+              >
+                {pendingOnly ? 'Showing Pending Only' : 'Show Pending Only'}
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -165,6 +259,23 @@ export const InvestorsManagement = () => {
                         >
                           <FileText className="h-4 w-4" />
                         </Button>
+                      )}
+                      {investor.profiles?.verification_status === 'pending' && (
+                        <>
+                          <Button
+                            size="sm"
+                            onClick={() => handleVerification(investor.user_id, 'verified')}
+                          >
+                            <CheckCircle className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleVerification(investor.user_id, 'rejected')}
+                          >
+                            <XCircle className="h-4 w-4" />
+                          </Button>
+                        </>
                       )}
                     </div>
                   </TableCell>

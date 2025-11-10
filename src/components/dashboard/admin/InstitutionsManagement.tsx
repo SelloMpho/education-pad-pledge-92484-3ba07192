@@ -5,7 +5,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
-import { Search, Eye, FileText } from 'lucide-react';
+import { Search, Eye, FileText, CheckCircle, XCircle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -39,11 +40,31 @@ export const InstitutionsManagement = () => {
   const { toast } = useToast();
   const [institutions, setInstitutions] = useState<InstitutionWithProfile[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'verified' | 'rejected'>('all');
+  const [pendingOnly, setPendingOnly] = useState(false);
   const [selectedInstitution, setSelectedInstitution] = useState<InstitutionWithProfile | null>(null);
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
 
   useEffect(() => {
     fetchInstitutions();
+    // Subscribe to realtime changes for institutions and profiles
+    const channel = supabase
+      .channel('admin-institutions-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'institutions' },
+        () => fetchInstitutions()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles' },
+        () => fetchInstitutions()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fetchInstitutions = async () => {
@@ -72,6 +93,31 @@ export const InstitutionsManagement = () => {
     }
   };
 
+  const handleVerification = async (
+    userId: string,
+    status: 'verified' | 'rejected'
+  ) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ verification_status: status })
+        .eq('id', userId);
+
+      if (error) throw error;
+      toast({
+        title: 'Success',
+        description: `Institution ${status === 'verified' ? 'verified' : 'rejected'} successfully`,
+      });
+      fetchInstitutions();
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update verification status',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleViewCertificate = async (certificateUrl: string) => {
     try {
       const { data } = await supabase.storage
@@ -91,10 +137,20 @@ export const InstitutionsManagement = () => {
   };
 
   const filteredInstitutions = institutions.filter(
-    (inst) =>
-      inst.institution_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inst.country.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      inst.city.toLowerCase().includes(searchTerm.toLowerCase())
+    (inst) => {
+      const matchesSearch =
+        inst.institution_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        inst.country.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        inst.city.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const status = (inst.profiles?.verification_status || '').toLowerCase();
+      const matchesStatus =
+        statusFilter === 'all' || status === statusFilter;
+
+      const matchesPendingToggle = !pendingOnly || status === 'pending';
+
+      return matchesSearch && matchesStatus && matchesPendingToggle;
+    }
   );
 
   return (
@@ -103,14 +159,55 @@ export const InstitutionsManagement = () => {
         <CardHeader>
           <CardTitle>Institutions Management</CardTitle>
           <CardDescription>View and manage all registered institutions</CardDescription>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search institutions..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search institutions..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-9"
-            />
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant={statusFilter === 'all' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setStatusFilter('all')}
+              >
+                All
+              </Button>
+              <Button
+                variant={statusFilter === 'pending' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setStatusFilter('pending')}
+              >
+                Pending
+              </Button>
+              <Button
+                variant={statusFilter === 'verified' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setStatusFilter('verified')}
+              >
+                Verified
+              </Button>
+              <Button
+                variant={statusFilter === 'rejected' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setStatusFilter('rejected')}
+              >
+                Rejected
+              </Button>
+            </div>
+            <div className="flex items-center justify-end">
+              <Button
+                variant={pendingOnly ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setPendingOnly((p) => !p)}
+              >
+                {pendingOnly ? 'Showing Pending Only' : 'Show Pending Only'}
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -132,7 +229,19 @@ export const InstitutionsManagement = () => {
                   <TableCell>{institution.city}, {institution.country}</TableCell>
                   <TableCell>{institution.contact_person}</TableCell>
                   <TableCell>{institution.profiles?.email}</TableCell>
-                  <TableCell className="capitalize">{institution.profiles?.verification_status}</TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        institution.profiles?.verification_status === 'verified'
+                          ? 'default'
+                          : institution.profiles?.verification_status === 'pending'
+                          ? 'secondary'
+                          : 'destructive'
+                      }
+                    >
+                      {institution.profiles?.verification_status}
+                    </Badge>
+                  </TableCell>
                   <TableCell>
                     <div className="flex gap-2">
                       <Button
@@ -153,6 +262,23 @@ export const InstitutionsManagement = () => {
                         >
                           <FileText className="h-4 w-4" />
                         </Button>
+                      )}
+                      {institution.profiles?.verification_status === 'pending' && (
+                        <>
+                          <Button
+                            size="sm"
+                            onClick={() => handleVerification(institution.user_id, 'verified')}
+                          >
+                            <CheckCircle className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleVerification(institution.user_id, 'rejected')}
+                          >
+                            <XCircle className="h-4 w-4" />
+                          </Button>
+                        </>
                       )}
                     </div>
                   </TableCell>

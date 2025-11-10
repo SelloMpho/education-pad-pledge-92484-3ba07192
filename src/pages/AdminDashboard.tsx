@@ -63,13 +63,33 @@ export default function AdminDashboard() {
 
   const fetchDashboardData = async () => {
     try {
-      const { data: profiles } = await supabase
+      console.log('Fetching dashboard data as admin...');
+      
+      // First check if we're authenticated
+      const { data: { user } } = await supabase.auth.getUser();
+      console.log('Current authenticated user:', user);
+      
+      const { data: profiles, error } = await supabase
         .from('profiles')
         .select('*');
 
+      if (error) {
+        console.error('Error fetching profiles:', error);
+        return;
+      }
+
+      console.log('Fetched profiles:', profiles);
+      console.log('Total profiles count:', profiles?.length);
+      
       const pending = profiles?.filter(p => p.verification_status === 'pending') || [];
       const institutions = profiles?.filter(p => p.user_type === 'institution') || [];
       const investors = profiles?.filter(p => p.user_type === 'investor') || [];
+      const admins = profiles?.filter(p => p.user_type === 'admin') || [];
+
+      console.log('Pending users:', pending.length);
+      console.log('Institutions:', institutions.length);
+      console.log('Investors:', investors.length);
+      console.log('Admins:', admins.length);
 
       setStats({
         totalUsers: profiles?.length || 0,
@@ -115,6 +135,9 @@ export default function AdminDashboard() {
       </div>
     );
   }
+
+  console.log('Current role:', role);
+  console.log('Role is admin:', role === 'admin');
 
   const renderContent = () => {
     switch (activeTab) {
@@ -202,6 +225,12 @@ export default function AdminDashboard() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Admin Dashboard</h1>
           <p className="text-muted-foreground">Manage users, organizations, and system settings</p>
+          <div className="mt-4 p-4 bg-yellow-100 border border-yellow-400 rounded">
+            <p className="text-sm"><strong>Debug Info:</strong></p>
+            <p className="text-sm">Role: {role || 'null'}</p>
+            <p className="text-sm">Total Users: {stats.totalUsers}</p>
+            <p className="text-sm">Pending: {stats.pendingVerifications}</p>
+          </div>
         </div>
         {renderContent()}
       </main>

@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { Heart, Home, Building2, MessageSquare, BarChart3, Settings, ChevronRight } from "lucide-react";
+import { Heart, Home, Building2, MessageSquare, BarChart3, Settings, ChevronRight, FileText, LogOut } from "lucide-react";
 import { motion } from "framer-motion";
+import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
 
 interface SidebarOption {
   icon: any;
@@ -12,6 +14,7 @@ const menuItems: SidebarOption[] = [
   { icon: Home, title: "Overview", value: "overview" },
   { icon: Heart, title: "Donations", value: "donations" },
   { icon: Building2, title: "Institutions", value: "institutions" },
+  { icon: FileText, title: "Reports", value: "reports" },
   { icon: MessageSquare, title: "Messages", value: "messages" },
   { icon: BarChart3, title: "Analytics", value: "analytics" },
   { icon: Settings, title: "Profile", value: "profile" },
@@ -25,6 +28,19 @@ interface InvestorSidebarProps {
 
 export const InvestorSidebar = ({ selected, onSelect, messageCount }: InvestorSidebarProps) => {
   const [open, setOpen] = useState(true);
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error && !(typeof error === 'object' && 'name' in error && (error as any).name === 'AbortError')) {
+        throw error;
+      }
+    } catch (e) {
+      // Ignore aborted logout requests due to immediate navigation
+    }
+    navigate("/login");
+  };
 
   return (
     <motion.nav
@@ -49,6 +65,14 @@ export const InvestorSidebar = ({ selected, onSelect, messageCount }: InvestorSi
           />
         ))}
       </div>
+
+      <Option
+        Icon={LogOut}
+        title="Logout"
+        selected={""}
+        setSelected={handleLogout}
+        open={open}
+      />
 
       <ToggleClose open={open} setOpen={setOpen} />
     </motion.nav>

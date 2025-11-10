@@ -33,12 +33,18 @@ export const InstitutionSidebar = ({ selected, onSelect, pendingCount, messageCo
 
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut();
+      if (error && !(typeof error === 'object' && 'name' in error && (error as any).name === 'AbortError')) {
+        throw error;
+      }
       toast.success("Logged out successfully");
-      navigate('/');
     } catch (error) {
-      toast.error("Failed to logout");
+      // Swallow abort errors to avoid noisy logs; show generic message otherwise
+      if (!(typeof error === 'object' && 'name' in (error as any) && (error as any).name === 'AbortError')) {
+        toast.error("Failed to logout");
+      }
     }
+    navigate('/');
   };
 
   return (

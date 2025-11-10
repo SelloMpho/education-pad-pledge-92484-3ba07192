@@ -14,6 +14,7 @@ import { CertificateUpload } from '@/components/dashboard/CertificateUpload';
 import { InvestorDonations } from '@/components/dashboard/investor/InvestorDonations';
 import { InstitutionsList } from '@/components/dashboard/investor/InstitutionsList';
 import { InvestorAnalytics } from '@/components/dashboard/investor/InvestorAnalytics';
+import InvestorReports from '@/components/dashboard/investor/InvestorReports';
 import { InvestorProfile } from '@/components/dashboard/investor/InvestorProfile';
 
 export default function InvestorDashboard() {
@@ -39,6 +40,13 @@ export default function InvestorDashboard() {
       fetchDashboardData();
     }
   }, [role]);
+
+  // Move navigation side-effect out of render to avoid React warnings
+  useEffect(() => {
+    if (activeTab === 'messages') {
+      navigate('/messages');
+    }
+  }, [activeTab, navigate]);
 
   const fetchDashboardData = async () => {
     try {
@@ -170,10 +178,11 @@ export default function InvestorDashboard() {
       case 'institutions':
         return <InstitutionsList />;
       case 'messages':
-        navigate('/messages');
         return null;
       case 'analytics':
         return <InvestorAnalytics />;
+      case 'reports':
+        return <InvestorReports />;
       case 'profile':
         return <InvestorProfile />;
       default:

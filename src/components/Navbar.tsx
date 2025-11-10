@@ -16,7 +16,15 @@ export const Navbar = () => {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    try {
+      const { error } = await supabase.auth.signOut();
+      // Ignore aborted network errors that can occur during navigation
+      if (error && !(typeof error === 'object' && 'name' in error && (error as any).name === 'AbortError')) {
+        throw error;
+      }
+    } catch (e) {
+      // Swallow abort errors to prevent noisy logs
+    }
     navigate('/');
   };
 

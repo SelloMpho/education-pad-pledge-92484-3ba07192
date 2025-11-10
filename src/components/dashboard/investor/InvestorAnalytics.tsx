@@ -22,24 +22,27 @@ export const InvestorAnalytics = () => {
   useEffect(() => {
     fetchAnalytics();
 
-    // Set up real-time subscription for donations
-    const channel = supabase
+    const donationsChannel = supabase
       .channel('donations-changes')
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'donations'
-        },
-        () => {
-          fetchAnalytics();
-        }
+        { event: '*', schema: 'public', table: 'donations' },
+        () => fetchAnalytics()
+      )
+      .subscribe();
+
+    const investorChannel = supabase
+      .channel('investor-profile-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'investors' },
+        () => fetchAnalytics()
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(donationsChannel);
+      supabase.removeChannel(investorChannel);
     };
   }, []);
 
@@ -48,13 +51,21 @@ export const InvestorAnalytics = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      const { data: investor } = await supabase
+      const { data: investor, error: investorError } = await supabase
         .from('investors')
         .select('id')
         .eq('user_id', user.id)
         .maybeSingle();
 
-      if (!investor) throw new Error('Investor profile not found');
+      if (investorError || !investor) {
+        toast({
+          title: 'Profile required',
+          description: 'Please complete your investor profile first.',
+          variant: 'destructive',
+        });
+        setLoading(false);
+        return;
+      }
 
       const { data: donations, error } = await supabase
         .from('donations')
